@@ -14,9 +14,6 @@ jobs:
           - name: linux@amd64
             os: ubuntu-latest
             platform: linux
-          - name: macos@amd64
-            os: macos-13
-            platform: darwin
 
     runs-on: ${{ matrix.config.os }}
     name: ${{ matrix.config.name }}
@@ -44,7 +41,7 @@ jobs:
           chmod a+x bazelisk-${{ matrix.config.platform }}-amd64
           sudo mv bazelisk-${{ matrix.config.platform }}-amd64 /usr/local/bin/bazel
 
-      - name: Build grpc_php_plugin and grpc_pyhon_plugin
+      - name: Build grpc_php_plugin and grpc_python_plugin
         run: |
           bazel build src/compiler:grpc_php_plugin
           bazel build src/compiler:grpc_python_plugin
@@ -53,9 +50,9 @@ jobs:
           VERSION: ${{ steps.get_release.outputs.tag }}
         run: |
           cd bazel-bin/src/compiler/
-          cp grpc_php_plugin grpc-php-plugin
+          cp grpc_php_plugin_binary grpc-php-plugin
           tar czf grpc-php-plugin.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz grpc-php-plugin
-          cp grpc_python_plugin grpc-python-plugin
+          cp grpc_python_plugin_binary grpc-python-plugin
           tar czf grpc-python-plugin.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz grpc-python-plugin
 
       - name: Upload Release Asset for grpc_php_plugin
