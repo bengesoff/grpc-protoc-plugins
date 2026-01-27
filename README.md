@@ -1,4 +1,4 @@
-# grpc-php-plugin && grpc-python-plugin
+# protoc, grpc-php-plugin && grpc-python-plugin
 
 At the time of this repo creation [the official way][1] of getting `grpc-php-plugin` artifact was to build it manually:
 
@@ -12,8 +12,8 @@ with the [recommendation to use python module][6]:
 > `python -m pip install grpcio-tools`
 > `$ python -m grpc_tools.protoc -I../../protos --python_out=. --grpc_python_out=. ../../protos/helloworld.proto`
 
-This repository is a temporary solution for building and storing `grpc-php-plugin` and `grpc-python-plugin` artifacts
-to use as `protoc` plugins, until a better way will be found.
+This repository is a temporary solution for building and storing `protoc`, `grpc-php-plugin` and `grpc-python-plugin` artifacts
+to use for protocol buffer compilation, until a better way will be found.
 
 ## How it works
 
@@ -39,6 +39,7 @@ is based on `scratch` and contains only the plugin binaries, making it ideal for
 - `latest`
 
 **Binary locations in image:**
+- `/usr/local/bin/protoc`
 - `/usr/local/bin/grpc_php_plugin`
 - `/usr/local/bin/grpc_python_plugin`
 
@@ -48,6 +49,7 @@ is based on `scratch` and contains only the plugin binaries, making it ideal for
 FROM ghcr.io/bengesoff/grpc-protoc-plugins:v1.35.0 AS grpc-plugins
 
 FROM your-base-image
+COPY --from=grpc-plugins /usr/local/bin/protoc /usr/local/bin/
 COPY --from=grpc-plugins /usr/local/bin/grpc_php_plugin /usr/local/bin/
 COPY --from=grpc-plugins /usr/local/bin/grpc_python_plugin /usr/local/bin/
 ```

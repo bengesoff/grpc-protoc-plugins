@@ -47,9 +47,10 @@ jobs:
           chmod a+x bazelisk-${{ matrix.config.platform }}-amd64
           sudo mv bazelisk-${{ matrix.config.platform }}-amd64 /usr/local/bin/bazel
 
-      - name: Build grpc_php_plugin and grpc_python_plugin
+      - name: Build protoc, grpc_php_plugin and grpc_python_plugin
         working-directory: grpc
         run: |
+          bazel build @com_google_protobuf//:protoc
           bazel build src/compiler:grpc_php_plugin
           bazel build src/compiler:grpc_python_plugin
 
@@ -62,6 +63,8 @@ jobs:
           tar czf grpc-php-plugin.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz grpc-php-plugin
           cp grpc_python_plugin_binary grpc-python-plugin
           tar czf grpc-python-plugin.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz grpc-python-plugin
+          cp ../../external/com_google_protobuf/protoc protoc
+          tar czf protoc.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz protoc
 
       - name: Upload Release Asset for grpc_php_plugin
         uses: actions/upload-release-asset@v1
@@ -81,6 +84,16 @@ jobs:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: grpc/bazel-bin/src/compiler/grpc-python-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
           asset_name: grpc-python-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Release Asset for protoc
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: grpc/bazel-bin/src/compiler/protoc.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
+          asset_name: protoc.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
           asset_content_type: application/gzip
 
       - name: Set up Docker Buildx
