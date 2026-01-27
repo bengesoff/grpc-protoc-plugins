@@ -14,10 +14,20 @@ jobs:
           - name: linux@amd64
             os: ubuntu-latest
             platform: linux
+            arch: amd64
+          - name: linux@arm64
+            os: ubuntu-latest
+            platform: linux
+            arch: arm64
 
     runs-on: ${{ matrix.config.os }}
     name: ${{ matrix.config.name }}
     steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - uses: actions/github-script@v7
         id: get_release
         with:
@@ -43,15 +53,20 @@ jobs:
 
       - name: Install Basilisk
         run: |
-          wget https://github.com/bazelbuild/bazelisk/releases/download/v1.7.5/bazelisk-${{ matrix.config.platform }}-amd64
-          chmod a+x bazelisk-${{ matrix.config.platform }}-amd64
-          sudo mv bazelisk-${{ matrix.config.platform }}-amd64 /usr/local/bin/bazel
+          wget https://github.com/bazelbuild/bazelisk/releases/download/v1.7.5/bazelisk-${{ matrix.config.platform }}-${{ matrix.config.arch }}
+          chmod a+x bazelisk-${{ matrix.config.platform }}-${{ matrix.config.arch }}
+          sudo mv bazelisk-${{ matrix.config.platform }}-${{ matrix.config.arch }} /usr/local/bin/bazel
 
       - name: Build grpc_php_plugin and grpc_python_plugin
         working-directory: grpc
         run: |
-          bazel build src/compiler:grpc_php_plugin
-          bazel build src/compiler:grpc_python_plugin
+          if [ "${{ matrix.config.arch }}" = "arm64" ]; then
+            bazel build --cpu=aarch64 src/compiler:grpc_php_plugin
+            bazel build --cpu=aarch64 src/compiler:grpc_python_plugin
+          else
+            bazel build src/compiler:grpc_php_plugin
+            bazel build src/compiler:grpc_python_plugin
+          fi
 
       - name: Archive artifacts
         env:
@@ -59,9 +74,9 @@ jobs:
         run: |
           cd grpc/bazel-bin/src/compiler/
           cp grpc_php_plugin_binary grpc-php-plugin
-          tar czf grpc-php-plugin.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz grpc-php-plugin
+          tar czf grpc-php-plugin.${VERSION}.${{ matrix.config.platform }}.${{ matrix.config.arch }}.tar.gz grpc-php-plugin
           cp grpc_python_plugin_binary grpc-python-plugin
-          tar czf grpc-python-plugin.${VERSION}.${{ matrix.config.platform }}.amd64.tar.gz grpc-python-plugin
+          tar czf grpc-python-plugin.${VERSION}.${{ matrix.config.platform }}.${{ matrix.config.arch }}.tar.gz grpc-python-plugin
 
       - name: Upload Release Asset for grpc_php_plugin
         uses: actions/upload-release-asset@v1
@@ -69,8 +84,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: grpc/bazel-bin/src/compiler/grpc-php-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
-          asset_name: grpc-php-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
+          asset_path: grpc/bazel-bin/src/compiler/grpc-php-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.${{ matrix.config.arch }}.tar.gz
+          asset_name: grpc-php-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.${{ matrix.config.arch }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload Release Asset for grpc_python_plugin
@@ -79,8 +94,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: grpc/bazel-bin/src/compiler/grpc-python-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
-          asset_name: grpc-python-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.amd64.tar.gz
+          asset_path: grpc/bazel-bin/src/compiler/grpc-python-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.${{ matrix.config.arch }}.tar.gz
+          asset_name: grpc-python-plugin.${{ steps.get_release.outputs.tag }}.${{ matrix.config.platform }}.${{ matrix.config.arch }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Set up Docker Buildx
@@ -98,7 +113,41 @@ jobs:
         with:
           context: grpc/bazel-bin/src/compiler
           file: this-repo/Dockerfile
+          platforms: linux/${{ matrix.config.arch }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.get_release.outputs.tag }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.get_release.outputs.tag }}-${{ matrix.config.arch }}
+            ghcr.io/${{ github.repository }}:latest-${{ matrix.config.arch }}
+
+  create-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Create multi-arch manifest
+    steps:
+      - uses: actions/github-script@v7
+        id: get_release
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            core.setOutput('tag', tag);
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest
+        run: |
+          TAG="${{ steps.get_release.outputs.tag }}"
+
+          # Create and push manifest for version tag
+          docker buildx imagetools create -t ghcr.io/${{ github.repository }}:${TAG} \
+            ghcr.io/${{ github.repository }}:${TAG}-amd64 \
+            ghcr.io/${{ github.repository }}:${TAG}-arm64
+
+          # Create and push manifest for latest tag
+          docker buildx imagetools create -t ghcr.io/${{ github.repository }}:latest \
+            ghcr.io/${{ github.repository }}:latest-amd64 \
+            ghcr.io/${{ github.repository }}:latest-arm64
