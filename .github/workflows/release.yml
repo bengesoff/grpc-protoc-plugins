@@ -16,18 +16,13 @@ jobs:
             platform: linux
             arch: amd64
           - name: linux@arm64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm64
             platform: linux
             arch: arm64
 
     runs-on: ${{ matrix.config.os }}
     name: ${{ matrix.config.name }}
     steps:
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
       - uses: actions/github-script@v7
         id: get_release
         with:
@@ -60,13 +55,8 @@ jobs:
       - name: Build grpc_php_plugin and grpc_python_plugin
         working-directory: grpc
         run: |
-          if [ "${{ matrix.config.arch }}" = "arm64" ]; then
-            bazel build --cpu=aarch64 src/compiler:grpc_php_plugin
-            bazel build --cpu=aarch64 src/compiler:grpc_python_plugin
-          else
-            bazel build src/compiler:grpc_php_plugin
-            bazel build src/compiler:grpc_python_plugin
-          fi
+          bazel build src/compiler:grpc_php_plugin
+          bazel build src/compiler:grpc_python_plugin
 
       - name: Archive artifacts
         env:
